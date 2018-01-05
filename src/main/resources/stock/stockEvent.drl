@@ -1,0 +1,55 @@
+package demo.stocks
+
+import demo.stock.Tick
+import java.math.BigDecimal
+import java.util.Date 
+
+global BigDecimal sellTolerance
+global BigDecimal buyTolerance
+
+declare Tick
+  @role(event)
+  @timestamp(timestamp)
+end
+
+rule "Print Ticks"
+    when 
+        $t:Tick($p: price, $s: symbol) from entry-point "stock feed"
+    then
+        //System.out.println("Got tick for " + $t.getSymbol());
+end
+
+rule "Sell"
+    when
+        $t:Tick($p1:price, $s:symbol) from entry-point "stock feed"
+        Tick(this after[0s,30s] $t, $p2:price, $s == symbol) from entry-point "stock feed"
+        eval($p2.subtract($p1).compareTo(sellTolerance) >= 0)
+    then
+        System.out.println($s + " should be sold: " + $p1 + " => " + $p2);
+end
+
+rule "Buy"
+    when
+        $t:Tick($p1:price, $s:symbol) from entry-point "stock feed"
+        Tick(this after[0s,15s] $t, $p2:price, $s == symbol) from entry-point "stock feed"
+        eval($p2.subtract($p1).compareTo(buyTolerance) >= 0)
+    then
+        System.out.println($s + " should be bought: " + $p1 + " => " + $p2);
+end
+
+rule "High Volume Trading on AAPL"
+    when
+        $v:Number(longValue > 300) from accumulate (
+            Tick($s:shares, symbol == "AAPL") over window:time(30s) from entry-point "stock feed"
+            , sum($s))
+    then
+        System.out.println("High volume trading on AAPL: " + $v);
+end
+
+rule "not exists"
+    when
+        $t:Tick($s:symbol) from entry-point "stock feed"
+        not $t2:Tick(this != $t, $s == symbol, this after[0s,10s] $t) from entry-point "stock feed"
+    then
+        System.out.println($s + " not exist: " + $t.getTimestamp() + " current time: " + new Date());
+end
